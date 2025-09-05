@@ -62,13 +62,16 @@ class VersionRequest(BaseModel):
 def check_models(request: VersionRequest):
     update_required = False
     models_to_update = {}
-    
+
     for model, current_version in CURRENT_VERSIONS.items():
         device_version = request.versions.get(model)
         if device_version != current_version:
             update_required = True
-            models_to_update[model] = MODEL_LINKS[model]
-    
+            models_to_update[model] = {
+                "url": MODEL_LINKS[model],
+                "md5": MODEL_HASHES.get(model, "")
+            }
+
     if update_required:
         return {
             "update_required": True,
