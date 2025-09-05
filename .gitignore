@@ -52,3 +52,4 @@ env.bak/
 venv.bak/
 *.pt
 models/models_metadata.json
+*.zip

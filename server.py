@@ -4,6 +4,7 @@ from typing import Dict
 import shutil
 import os
 import json
+import hashlib
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 
@@ -33,9 +34,18 @@ def save_metadata(data):
     with open(META_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
+def calculate_md5(file_path: str) -> str:
+    """Вычислить MD5-хэш файла"""
+    md5_hash = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            md5_hash.update(chunk)
+    return md5_hash.hexdigest()
+
 metadata = load_metadata()
 CURRENT_VERSIONS = metadata.get("versions", {})
 MODEL_LINKS = metadata.get("links", {})
+MODEL_HASHES = metadata.get("hashes", {})
 
 app.mount("/files", StaticFiles(directory="models"), name="files")
 
@@ -75,24 +85,29 @@ async def upload_model(
     model_name: str = Form(...),
     version: str = Form(...)
 ):
-    """Админ загружает новую модель"""
+    """Админ загружает новую модель или архив приложения"""
     try:
         # Сохраняем файл
         file_path = os.path.join(MODELS_DIR, file.filename)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
+        # Вычисляем MD5
+        md5 = calculate_md5(file_path)
+
         # Обновляем метаданные
         CURRENT_VERSIONS[model_name] = version
         MODEL_LINKS[model_name] = f"http://{domen}/files/{file.filename}"
+        MODEL_HASHES[model_name] = md5
 
-        save_metadata({"versions": CURRENT_VERSIONS, "links": MODEL_LINKS})
+        save_metadata({"versions": CURRENT_VERSIONS, "links": MODEL_LINKS, "hashes": MODEL_HASHES})
 
         return {
             "success": True,
             "message": f"Model {model_name} updated to version {version}",
             "versions": CURRENT_VERSIONS,
-            "link": MODEL_LINKS[model_name]
+            "link": MODEL_LINKS[model_name],
+            "md5": md5
         }
     except Exception as e:
         return {"success": False, "error": str(e)}
